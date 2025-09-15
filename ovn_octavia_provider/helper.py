@@ -467,7 +467,7 @@ class OvnProviderHelper():
         try:
             return clients.get_neutron_client()
         except driver_exceptions.DriverError as e:
-            LOG.warn(f"Cannot get client from neutron {e}")
+            LOG.warning(f"Cannot get client from neutron {e}")
             return None
 
     def _get_vip_port_and_subnet_from_lb(self, neutron_client, vip_port_id,
@@ -482,10 +482,10 @@ class OvnProviderHelper():
                 subnet_requested
             )
         except openstack.exceptions.ResourceNotFound:
-            LOG.warn("Load balancer VIP port and subnet not found.")
+            LOG.warning("Load balancer VIP port and subnet not found.")
             return None, None
         except AttributeError:
-            LOG.warn("Load Balancer VIP port missing information.")
+            LOG.warning("Load Balancer VIP port missing information.")
             return None, None
 
     def _build_external_ids(self, loadbalancer, port):
@@ -3179,7 +3179,7 @@ class OvnProviderHelper():
         try:
             ls = self.ovn_nbdb_api.lookup('Logical_Switch', ls_name)
         except idlutils.RowNotFound:
-            LOG.warn(f"Logical Switch {ls_name} not found.")
+            LOG.warning(f"Logical Switch {ls_name} not found.")
             return
         for port in ls.ports:
             if port_id in port.name:
@@ -3211,9 +3211,9 @@ class OvnProviderHelper():
         try:
             return list(neutron_client.ips(port_id=lb.vip_port_id))
         except openstack.exceptions.HttpException as e:
-            LOG.warn("Error on fetch fip for "
-                     f"{lb.loadbalancer_id} "
-                     f"Error: {str(e)}")
+            LOG.warning("Error on fetch fip for "
+                        f"{lb.loadbalancer_id} "
+                        f"Error: {str(e)}")
 
     def _add_lbhc(self, ovn_lb, pool_key, info):
         hm_id = info[constants.ID]
@@ -3787,7 +3787,8 @@ class OvnProviderHelper():
         :param ovn_lb: The OVN LoadBalancer object that needs to be sync
         :param pool_key: The pool_key where health monitor is associated
         """
-        lbhcs, ovn_lb = self._find_ovn_lb_from_hm_id(hm[constants.ID])
+        lbhcs, _ovn_lb = self._find_ovn_lb_from_hm_id(hm[constants.ID])
+        ovn_lb = _ovn_lb if _ovn_lb else ovn_lb
         if not lbhcs:
             LOG.debug("Loadbalancer health check %s not found!",
                       hm[constants.ID])
