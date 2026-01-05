@@ -349,15 +349,15 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock.call('pool_%s:D' % self.pool_id)])
 
     def _test_member_create(self, member):
-        info = {'id': self.ref_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'subnet_id': self.ref_member.subnet_id,
-                'admin_state_up': self.ref_member.admin_state_up}
+        member_info = {'id': self.ref_member.member_id,
+                       'address': self.ref_member.address,
+                       'protocol_port': self.ref_member.protocol_port,
+                       'pool_id': self.ref_member.pool_id,
+                       'subnet_id': self.ref_member.subnet_id,
+                       'admin_state_up': self.ref_member.admin_state_up}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_CREATE,
-                         'info': info}
-        info_dvr = {
+                         'info': [member_info]}
+        member_dvr = {
             'id': self.ref_member.member_id,
             'address': self.ref_member.address,
             'pool_id': self.ref_member.pool_id,
@@ -365,7 +365,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'action': ovn_const.REQ_INFO_MEMBER_ADDED}
         expected_dict_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
-            'info': info_dvr}
+            'info': [member_dvr]}
         self.driver.member_create(member)
         expected = [
             mock.call(expected_dict),
@@ -443,7 +443,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 'subnet_id': self.ref_member.subnet_id,
                 'admin_state_up': True}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_CREATE,
-                         'info': info}
+                         'info': [info]}
         expected_dict_dvr = {'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
                              'info': mock.ANY}
         expected = [
@@ -453,28 +453,28 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_add_request.assert_has_calls(expected)
 
     def test_member_update(self):
-        info = {'id': self.update_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'admin_state_up': self.update_member.admin_state_up,
-                'old_admin_state_up': self.ref_member.admin_state_up}
+        member = {'id': self.update_member.member_id,
+                  'address': self.ref_member.address,
+                  'protocol_port': self.ref_member.protocol_port,
+                  'pool_id': self.ref_member.pool_id,
+                  'admin_state_up': self.update_member.admin_state_up,
+                  'old_admin_state_up': self.ref_member.admin_state_up}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_UPDATE,
-                         'info': info}
+                         'info': [member]}
         self.driver.member_update(self.ref_member, self.update_member)
         self.mock_add_request.assert_called_once_with(expected_dict)
 
     def test_member_update_missing_subnet_id(self):
         self.driver._ovn_helper._get_subnet_from_pool.return_value = (
             self.ref_member.subnet_id, '198.52.100.0/24')
-        info = {'id': self.update_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'admin_state_up': self.update_member.admin_state_up,
-                'old_admin_state_up': self.ref_member.admin_state_up}
+        member = {'id': self.update_member.member_id,
+                  'address': self.ref_member.address,
+                  'protocol_port': self.ref_member.protocol_port,
+                  'pool_id': self.ref_member.pool_id,
+                  'admin_state_up': self.update_member.admin_state_up,
+                  'old_admin_state_up': self.ref_member.admin_state_up}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_UPDATE,
-                         'info': info}
+                         'info': [member]}
         member = copy.copy(self.ref_member)
         member.subnet_id = data_models.UnsetType()
         self.driver.member_update(member, self.update_member)
@@ -484,13 +484,13 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.driver._ovn_helper._get_subnet_from_pool.return_value = (
             self.ref_member.subnet_id, '198.52.100.0/24')
         self.update_member.admin_state_up = data_models.UnsetType()
-        info = {'id': self.update_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'old_admin_state_up': self.ref_member.admin_state_up}
+        member = {'id': self.update_member.member_id,
+                  'address': self.ref_member.address,
+                  'protocol_port': self.ref_member.protocol_port,
+                  'pool_id': self.ref_member.pool_id,
+                  'old_admin_state_up': self.ref_member.admin_state_up}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_UPDATE,
-                         'info': info}
+                         'info': [member]}
         member = copy.copy(self.ref_member)
         member.subnet_id = data_models.UnsetType()
         self.driver.member_update(member, self.update_member)
@@ -505,10 +505,12 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
     def test_member_batch_update(self):
         self.driver.member_batch_update(self.pool_id,
                                         [self.ref_member, self.update_member])
-        self.assertEqual(self.mock_add_request.call_count, 4)
+        # Two create requests, that now will be in just one with two member in
+        # a list, one for delete and one for delete_dvr
+        self.assertEqual(self.mock_add_request.call_count, 3)
 
     def test_member_batch_update_member_delete(self):
-        info_md = {
+        member = {
             'id': self.ref_member.member_id,
             'address': mock.ANY,
             'protocol_port': mock.ANY,
@@ -516,7 +518,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'subnet_id': self.ref_member.subnet_id}
         expected_dict_md = {
             'type': ovn_const.REQ_TYPE_MEMBER_DELETE,
-            'info': info_md}
+            'info': [member]}
         expected = [
             mock.call(expected_dict_md)]
         self.driver.member_batch_update(self.pool_id, [])
@@ -530,7 +532,8 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_find_lb_pool_key.return_value = ovn_lb
         self.driver.member_batch_update(self.pool_id,
                                         [self.ref_member, self.update_member])
-        self.assertEqual(self.mock_add_request.call_count, 2)
+        # only one request to create two new members in the empty pool
+        self.assertEqual(self.mock_add_request.call_count, 1)
 
     def test_member_batch_update_skipped_monitor(self):
         self.ref_member.monitor_address = '10.11.1.1'
@@ -561,7 +564,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'admin_state_up': False}
         expected_dict_mu = {
             'type': ovn_const.REQ_TYPE_MEMBER_UPDATE,
-            'info': info_mu}
+            'info': [info_mu]}
         expected = [
             mock.call(expected_dict_mu)]
         self.ref_member.admin_state_up = False
@@ -604,14 +607,14 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                           self.ref_member)
 
     def test_member_delete(self):
-        info = {'id': self.ref_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'subnet_id': self.ref_member.subnet_id}
+        member = {'id': self.ref_member.member_id,
+                  'address': self.ref_member.address,
+                  'protocol_port': self.ref_member.protocol_port,
+                  'pool_id': self.ref_member.pool_id,
+                  'subnet_id': self.ref_member.subnet_id}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_DELETE,
-                         'info': info}
-        info_dvr = {
+                         'info': [member]}
+        member_dvr = {
             'id': self.ref_member.member_id,
             'address': self.ref_member.address,
             'pool_id': self.ref_member.pool_id,
@@ -619,7 +622,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'action': ovn_const.REQ_INFO_MEMBER_DELETED}
         expected_dict_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
-            'info': info_dvr}
+            'info': [member_dvr]}
         self.driver.member_delete(self.ref_member)
         expected = [
             mock.call(expected_dict),
@@ -629,14 +632,14 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
     def test_member_delete_missing_subnet_id(self):
         self.driver._ovn_helper._get_subnet_from_pool.return_value = (
             self.ref_member.subnet_id, '198.52.100.0/24')
-        info = {'id': self.ref_member.member_id,
-                'address': self.ref_member.address,
-                'protocol_port': self.ref_member.protocol_port,
-                'pool_id': self.ref_member.pool_id,
-                'subnet_id': self.ref_member.subnet_id}
+        member = {'id': self.ref_member.member_id,
+                  'address': self.ref_member.address,
+                  'protocol_port': self.ref_member.protocol_port,
+                  'pool_id': self.ref_member.pool_id,
+                  'subnet_id': self.ref_member.subnet_id}
         expected_dict = {'type': ovn_const.REQ_TYPE_MEMBER_DELETE,
-                         'info': info}
-        info_dvr = {
+                         'info': [member]}
+        member_dvr = {
             'id': self.ref_member.member_id,
             'address': self.ref_member.address,
             'pool_id': self.ref_member.pool_id,
@@ -644,7 +647,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'action': ovn_const.REQ_INFO_MEMBER_DELETED}
         expected_dict_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
-            'info': info_dvr}
+            'info': [member_dvr]}
 
         member = copy.copy(self.ref_member)
         member.subnet_id = data_models.UnsetType()
@@ -807,10 +810,10 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'info': info_pool}
         expected_member_dict = {
             'type': ovn_const.REQ_TYPE_MEMBER_CREATE,
-            'info': info_member}
+            'info': [info_member]}
         expected_dict_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
-            'info': info_dvr}
+            'info': [info_dvr]}
         calls = [mock.call(expected_lb_dict),
                  mock.call(expected_listener_dict),
                  mock.call(expected_pool_dict),
@@ -1051,10 +1054,10 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'info': info_pool}
         expected_member_dict = {
             'type': ovn_const.REQ_TYPE_MEMBER_CREATE,
-            'info': info_member}
+            'info': [info_member]}
         expected_dict_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
-            'info': info_dvr}
+            'info': [info_dvr]}
         calls = [mock.call(expected_lb_dict),
                  mock.call(expected_listener_dict),
                  mock.call(expected_pool_dict),
@@ -1225,7 +1228,7 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             'info': info_hm}
         expected_members = {
             'type': ovn_const.REQ_TYPE_MEMBER_DELETE,
-            'info': info_member}
+            'info': [info_member]}
         expected_members_dvr = {
             'type': ovn_const.REQ_TYPE_HANDLE_MEMBER_DVR,
             'info': mock.ANY}
@@ -1623,6 +1626,14 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock_member_create, mock_update_status):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1637,9 +1648,16 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 self.ref_lb_fully_populated.pools[0]),
         )
         mock_member_create.assert_called_once_with(
-            self.driver._get_member_request_info(
-                self.ref_lb_fully_populated.pools[0].members[0]),
+            [self.driver._get_member_request_info(
+                self.ref_lb_fully_populated.pools[0].members[0])],
         )
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.MEMBERS: [{'id': self.member_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1653,6 +1671,12 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.listeners = data_models.UnsetType()
         self.ref_lb_fully_populated.pools = data_models.UnsetType()
+
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {}
+        mock_pool_create.return_value = {}
+
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1660,6 +1684,10 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         )
         mock_listener_create.assert_not_called()
         mock_pool_create.assert_not_called()
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1672,13 +1700,28 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock_member_create, mock_update_status):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
         self.ref_lb_fully_populated.listeners = []
         self.ref_lb_fully_populated.pools[0].members[0].subnet_id = None
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_member_create.assert_called_once_with(
-            self.driver._get_member_request_info(
-                self.ref_lb_fully_populated.pools[0].members[0]),
+            [self.driver._get_member_request_info(
+                self.ref_lb_fully_populated.pools[0].members[0])],
         )
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.MEMBERS: [{'id': self.member_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1692,6 +1735,16 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock_member_create, mock_hm_create, mock_update_status):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
+
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
+
         with mock.patch.object(
                 ovn_helper.OvnProviderHelper, '_find_ovn_lb_from_hm_id') \
                 as mock_find_ovn_lb_from_hm_id:
@@ -1699,6 +1752,15 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             self.ref_pool.healthmonitor = self.ref_health_monitor
             self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
             mock_hm_create.assert_not_called()
+
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.MEMBERS: [{'id': self.member_id}],
+            constants.HEALTHMONITORS: []
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1712,6 +1774,16 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock_member_create, mock_hm_create, mock_update_status):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
+        mock_hm_create.return_value = {constants.HEALTHMONITORS: [
+            {'id': self.healthmonitor_id}]}
         with mock.patch.object(
                 ovn_helper.OvnProviderHelper, '_find_ovn_lb_from_hm_id') \
                 as mock_find_ovn_lb_from_hm_id:
@@ -1722,6 +1794,14 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 self.driver._get_healthmonitor_request_info(
                     self.ref_lb_fully_populated.pools[0].healthmonitor),
             )
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.MEMBERS: [{'id': self.member_id}],
+            constants.HEALTHMONITORS: [{'id': self.healthmonitor_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1735,6 +1815,10 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.pools = data_models.Unset
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1745,6 +1829,11 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 self.ref_lb_fully_populated.listeners[0]),
         )
         mock_pool_create.assert_not_called()
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1758,6 +1847,13 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.pools[0].members = []
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1772,6 +1868,12 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 self.ref_lb_fully_populated.pools[0]),
         )
         mock_member_create.assert_not_called()
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: [{'id': self.pool_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1787,6 +1889,16 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.pools[0].members = []
         self.ref_pool.healthmonitor = self.ref_health_monitor
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
+        mock_hm_create.return_value = {constants.HEALTHMONITORS: [
+            {'id': self.healthmonitor_id}]}
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1805,6 +1917,13 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             self.driver._get_healthmonitor_request_info(
                 self.ref_lb_fully_populated.pools[0].healthmonitor),
         )
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.HEALTHMONITORS: [{'id': self.healthmonitor_id}]
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1818,6 +1937,12 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.listeners = []
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_pool_create.return_value = {constants.POOLS: [
+            {'id': self.pool_id}]}
+        mock_member_create.return_value = {constants.MEMBERS: [
+            {'id': self.member_id}]}
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1829,9 +1954,16 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
                 self.ref_lb_fully_populated.pools[0]),
         )
         mock_member_create.assert_called_once_with(
-            self.driver._get_member_request_info(
-                self.ref_lb_fully_populated.pools[0].members[0]),
+            [self.driver._get_member_request_info(
+                self.ref_lb_fully_populated.pools[0].members[0])],
         )
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [],
+            constants.POOLS: [{'id': self.pool_id}],
+            constants.MEMBERS: [{'id': self.member_id}],
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -1845,6 +1977,10 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         self.mock_find_ovn_lbs_with_retry.side_effect = [
             idlutils.RowNotFound]
         self.ref_lb_fully_populated.pools = []
+        mock_lb_create.return_value = {constants.LOADBALANCERS: [
+            {'id': self.loadbalancer_id}]}
+        mock_listener_create.return_value = {constants.LISTENERS: [
+            {'id': self.listener_id}]}
         self.driver._ensure_loadbalancer(self.ref_lb_fully_populated)
         mock_lb_create.assert_called_once_with(
             self.driver._get_loadbalancer_request_info(
@@ -1856,6 +1992,12 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
         )
         mock_pool_create.assert_not_called()
         mock_member_create.assert_not_called()
+        expected_status = {
+            constants.LOADBALANCERS: [{'id': self.loadbalancer_id}],
+            constants.LISTENERS: [{'id': self.listener_id}],
+            constants.POOLS: []
+        }
+        mock_update_status.assert_called_once_with(expected_status)
 
     @mock.patch.object(ovn_helper.OvnProviderHelper,
                        '_update_status_to_octavia')
@@ -2120,9 +2262,9 @@ class TestOvnProviderDriver(ovn_base.TestOvnOctaviaBase):
             mock.ANY,
             f"pool_{self.ref_lb_fully_populated.pools[0].pool_id}"
         )
-        mock_member_delete.assert_called_once_with({
+        mock_member_delete.assert_called_once_with([{
             'id': 'foo',
-            'subnet_id': 'subnet'}
+            'subnet_id': 'subnet'}]
         )
 
     @mock.patch.object(ovn_helper.OvnProviderHelper, 'get_octavia_lbs')
